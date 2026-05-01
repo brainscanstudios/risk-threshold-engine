@@ -166,7 +166,7 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 ```
 
-Add `[dev]` dependencies to `pyproject.toml` if you need additional tooling (e.g. `pytest`, `ruff`). The library itself has no runtime dependencies beyond the standard library, so a plain `pip install pytest` is sufficient to run the test suite:
+The `[dev]` extra installs `pytest`. The library itself has no runtime dependencies beyond the standard library.
 
 ```bash
 pytest
@@ -177,14 +177,63 @@ pytest -k regime   # run tests matching a keyword
 ### Project layout
 
 ```
-risk_threshold_engine/
-    __init__.py    public API surface
-    engine.py      all core logic lives here
+src/
+    risk_threshold_engine/
+        __init__.py    public API surface
+        engine.py      all core logic lives here
 tests/
-    test_engine.py full test suite (one file per module)
+    test_engine.py     full test suite
 ```
 
 The entire implementation is in `engine.py`. If you're adding a new action type or regime, the three methods to touch are `_build_actions`, `_decide`, and `_contextual_notes`. If you're changing the scoring model, adjust `DEFAULT_FACTOR_WEIGHTS` or pass custom weights at construction time.
+
+### Building and publishing
+
+Install the build tools:
+
+```bash
+pip install build twine
+```
+
+Build both the wheel and source distribution:
+
+```bash
+python3 -m build
+# outputs dist/risk_threshold_engine-X.Y.Z-py3-none-any.whl
+#         dist/risk_threshold_engine-X.Y.Z.tar.gz
+```
+
+Upload to TestPyPI first to verify the package page and install:
+
+```bash
+python3 -m twine upload --repository testpypi dist/*
+
+# Verify the install
+pip install --index-url https://test.pypi.org/simple/ risk-threshold-engine
+```
+
+Once satisfied, upload to production PyPI:
+
+```bash
+python3 -m twine upload dist/*
+```
+
+**Authentication**: create an API token scoped to this project on each account and store them in `~/.pypirc`:
+
+```ini
+[distutils]
+index-servers =
+    pypi
+    testpypi
+
+[pypi]
+username = __token__
+password = pypi-...
+
+[testpypi]
+username = __token__
+password = pypi-...
+```
 
 ### Submitting changes
 
