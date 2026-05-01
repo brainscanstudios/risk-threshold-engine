@@ -85,10 +85,10 @@ class FactorScores:
 class PortfolioState:
     """
     Snapshot of current portfolio positions.
-    sgov_pct: short-term bond / cash-equivalent as % of total portfolio (0–100).
+    buffer_pct: short-term bond / cash-equivalent as % of total portfolio (0–100).
     positions: ticker → market value in USD.
     """
-    sgov_pct:    float
+    buffer_pct:    float
     cash_usd:    float
     positions:   dict[str, float] = field(default_factory=dict)
     total_value: float = 0.0
@@ -252,7 +252,7 @@ class RiskThresholdEngine:
             return DeploymentDecision.REBALANCE
 
         if regime == RiskRegime.ELEVATED:
-            if portfolio and portfolio.sgov_pct >= 30:
+            if portfolio and portfolio.buffer_pct >= 30:
                 return DeploymentDecision.PAUSE
             return DeploymentDecision.REDUCED_DCA
 
@@ -301,12 +301,12 @@ class RiskThresholdEngine:
                     ))
 
         # Cash / short-term bond buffer
-        if portfolio and portfolio.sgov_pct < 20 and regime != RiskRegime.LOW:
+        if portfolio and portfolio.buffer_pct < 20 and regime != RiskRegime.LOW:
             actions.append(MitigationAction(
                 action_type = "ADD_BUFFER",
                 ticker      = None,
                 rationale   = (
-                    f"Cash buffer low ({portfolio.sgov_pct:.1f}% of portfolio). "
+                    f"Cash buffer low ({portfolio.buffer_pct:.1f}% of portfolio). "
                     "Route DCA surplus to short-term bonds or cash equivalents."
                 ),
             ))
@@ -341,12 +341,12 @@ class RiskThresholdEngine:
     ) -> str:
         notes = []
         if portfolio:
-            if portfolio.sgov_pct > 40:
+            if portfolio.buffer_pct > 40:
                 notes.append(
-                    f"Buffer is {portfolio.sgov_pct:.1f}% of portfolio — "
+                    f"Buffer is {portfolio.buffer_pct:.1f}% of portfolio — "
                     "consider whether excess cash is opportunity cost."
                 )
-            if portfolio.sgov_pct < 10 and regime != RiskRegime.LOW:
+            if portfolio.buffer_pct < 10 and regime != RiskRegime.LOW:
                 notes.append("Cash buffer critically low relative to risk regime.")
         return " | ".join(notes)
 
@@ -418,7 +418,7 @@ if __name__ == "__main__":
     )
 
     portfolio = PortfolioState(
-        sgov_pct  = 18.5,
+        buffer_pct  = 18.5,
         cash_usd  = 2_500.0,
         positions = {
             "ACME_GROWTH": 22_000.0,

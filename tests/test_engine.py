@@ -40,7 +40,7 @@ def severe_scores(**overrides) -> FactorScores:
 
 
 def basic_portfolio(**overrides) -> PortfolioState:
-    defaults = dict(sgov_pct=20.0, cash_usd=1_000.0, positions={"AAAA": 10_000.0, "BBBB": 5_000.0})
+    defaults = dict(buffer_pct=20.0, cash_usd=1_000.0, positions={"AAAA": 10_000.0, "BBBB": 5_000.0})
     return PortfolioState(**{**defaults, **overrides})
 
 
@@ -206,12 +206,12 @@ class TestDeploymentDecision:
         assert result.decision == DeploymentDecision.REDUCED_DCA
 
     def test_elevated_regime_reduced_dca_when_buffer_low(self):
-        portfolio = basic_portfolio(sgov_pct=10.0)
+        portfolio = basic_portfolio(buffer_pct=10.0)
         result = self.engine.evaluate(elevated_scores(), portfolio)
         assert result.decision == DeploymentDecision.REDUCED_DCA
 
     def test_elevated_regime_pause_when_buffer_high(self):
-        portfolio = basic_portfolio(sgov_pct=35.0)
+        portfolio = basic_portfolio(buffer_pct=35.0)
         result = self.engine.evaluate(elevated_scores(), portfolio)
         assert result.decision == DeploymentDecision.PAUSE
 
@@ -258,12 +258,12 @@ class TestActionGeneration:
         assert "PAUSE_DCA" in self._action_types(result)
 
     def test_low_buffer_triggers_add_buffer(self):
-        portfolio = basic_portfolio(sgov_pct=10.0)
+        portfolio = basic_portfolio(buffer_pct=10.0)
         result = self.engine.evaluate(moderate_scores(), portfolio)
         assert "ADD_BUFFER" in self._action_types(result)
 
     def test_adequate_buffer_no_add_buffer_action(self):
-        portfolio = basic_portfolio(sgov_pct=25.0)
+        portfolio = basic_portfolio(buffer_pct=25.0)
         result = self.engine.evaluate(moderate_scores(), portfolio)
         assert "ADD_BUFFER" not in self._action_types(result)
 
@@ -275,7 +275,7 @@ class TestActionGeneration:
     def test_trim_generated_for_high_beta_tickers(self):
         engine = RiskThresholdEngine(ticker_beta={"AAAA": 1.5, "BBBB": 0.6})
         portfolio = PortfolioState(
-            sgov_pct=20.0,
+            buffer_pct=20.0,
             cash_usd=1_000.0,
             positions={"AAAA": 10_000.0, "BBBB": 5_000.0},
         )
@@ -287,7 +287,7 @@ class TestActionGeneration:
     def test_trim_not_generated_for_zero_position(self):
         engine = RiskThresholdEngine(ticker_beta={"AAAA": 1.5})
         portfolio = PortfolioState(
-            sgov_pct=20.0,
+            buffer_pct=20.0,
             cash_usd=1_000.0,
             positions={"BBBB": 5_000.0},
         )
@@ -297,7 +297,7 @@ class TestActionGeneration:
     def test_options_signal_for_high_vol_and_held_high_beta(self):
         engine = RiskThresholdEngine(ticker_beta={"AAAA": 1.5})
         portfolio = PortfolioState(
-            sgov_pct=20.0,
+            buffer_pct=20.0,
             cash_usd=500.0,
             positions={"AAAA": 10_000.0},
         )
@@ -326,17 +326,17 @@ class TestContextualNotes:
         assert result.notes == ""
 
     def test_high_buffer_note(self):
-        portfolio = basic_portfolio(sgov_pct=45.0)
+        portfolio = basic_portfolio(buffer_pct=45.0)
         result = self.engine.evaluate(moderate_scores(), portfolio)
         assert "opportunity cost" in result.notes
 
     def test_critically_low_buffer_note(self):
-        portfolio = basic_portfolio(sgov_pct=5.0)
+        portfolio = basic_portfolio(buffer_pct=5.0)
         result = self.engine.evaluate(moderate_scores(), portfolio)
         assert "critically low" in result.notes
 
     def test_no_critical_note_in_low_regime(self):
-        portfolio = basic_portfolio(sgov_pct=5.0)
+        portfolio = basic_portfolio(buffer_pct=5.0)
         result = self.engine.evaluate(low_scores(), portfolio)
         assert "critically low" not in result.notes
 
@@ -376,7 +376,7 @@ class TestEvaluate:
 
     def test_portfolio_total_value_auto_computed(self):
         portfolio = PortfolioState(
-            sgov_pct=20.0,
+            buffer_pct=20.0,
             cash_usd=1_000.0,
             positions={"AAAA": 9_000.0},
         )

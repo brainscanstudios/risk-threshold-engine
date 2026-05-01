@@ -107,7 +107,7 @@ All five scores are required and must be in [0, 100]. How you produce them is up
 
 ```python
 PortfolioState(
-    sgov_pct:   float,              # cash/short-term bond % of portfolio
+    buffer_pct:   float,              # cash/short-term bond % of portfolio
     cash_usd:   float,
     positions:  dict[str, float],   # ticker → market value in USD
 )
