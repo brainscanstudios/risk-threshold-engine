@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/risk_threshold_engine"]
+
+[project]
+name = "risk-threshold-engine"
+version = "0.1.0"
+authors = [
+  { name = "Brain Scan Studios", email = "bkirsten@brainscanstudios.com" },
+]
+description = "Factor-score-driven market risk evaluation: composite score, regime classification, and deployment decisions."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+keywords = ["finance", "risk", "portfolio", "factor-investing"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Investment",
+    "Operating System :: OS Independent",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.urls]
+Repository = "https://github.com/BrainScanStudios/risk-threshold-engine"
+Issues = "https://github.com/BrainScanStudios/risk-threshold-engine/issues"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
