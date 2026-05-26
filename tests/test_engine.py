@@ -423,3 +423,121 @@ class TestPersistence:
             assert row[0] == "SEVERE"
         finally:
             os.unlink(db_path)
+
+
+# ---------------------------------------------------------------------------
+# Threshold parameter overrides
+# ---------------------------------------------------------------------------
+
+class TestThresholdOverrides:
+    def test_custom_severe_threshold_changes_regime(self):
+        engine = RiskThresholdEngine(severe_threshold=90.0)
+        # Score of 80 is SEVERE with default (76), but ELEVATED with threshold=90
+        assert engine._classify_regime(80.0) == RiskRegime.ELEVATED
+
+    def test_custom_elevated_threshold_changes_regime(self):
+        engine = RiskThresholdEngine(elevated_threshold=70.0)
+        # Score of 60 is ELEVATED with default (56), but MODERATE with threshold=70
+        assert engine._classify_regime(60.0) == RiskRegime.MODERATE
+
+    def test_custom_moderate_threshold_changes_regime(self):
+        engine = RiskThresholdEngine(moderate_threshold=35.0)
+        # Score of 32 is MODERATE with default (31), but LOW with raised threshold=35
+        assert engine._classify_regime(32.0) == RiskRegime.LOW
+
+    def test_evaluate_uses_custom_thresholds(self):
+        # Raise severe threshold so a normally-SEVERE score lands in ELEVATED
+        engine = RiskThresholdEngine(severe_threshold=90.0)
+        result = engine.evaluate(severe_scores())  # composite ~85
+        assert result.regime == RiskRegime.ELEVATED
+
+    def test_threshold_attributes_stored(self):
+        engine = RiskThresholdEngine(
+            severe_threshold=80.0,
+            elevated_threshold=60.0,
+            moderate_threshold=35.0,
+            hy_weight=0.70,
+            curve_weight=0.30,
+            hy_floor=1.5,
+            hy_range=10.0,
+            curve_normal=2.0,
+        )
+        assert engine.severe_threshold   == 80.0
+        assert engine.elevated_threshold == 60.0
+        assert engine.moderate_threshold == 35.0
+        assert engine.hy_weight          == 0.70
+        assert engine.curve_weight       == 0.30
+        assert engine.hy_floor           == 1.5
+        assert engine.hy_range           == 10.0
+        assert engine.curve_normal       == 2.0
+
+    def test_unknown_kwargs_absorbed_gracefully(self):
+        engine = RiskThresholdEngine(unknown_future_param=42)
+        assert engine._classify_regime(50.0) == RiskRegime.MODERATE
+
+    def test_default_thresholds_match_original_boundaries(self):
+        engine = RiskThresholdEngine()
+        assert engine.severe_threshold   == 76.0
+        assert engine.elevated_threshold == 56.0
+        assert engine.moderate_threshold == 31.0
+
+
+# ---------------------------------------------------------------------------
+# near_threshold_info()
+# ---------------------------------------------------------------------------
+
+class TestNearThresholdInfo:
+    def setup_method(self):
+        self.engine = RiskThresholdEngine()
+
+    def test_below_moderate_points_to_moderate(self):
+        info = self.engine.near_threshold_info(20.0)
+        assert info["next_regime"]    == "MODERATE"
+        assert info["next_boundary"]  == 31.0
+        assert abs(info["pts_to_next_boundary"] - 11.0) < 0.1
+
+    def test_in_moderate_points_to_elevated(self):
+        info = self.engine.near_threshold_info(45.0)
+        assert info["next_regime"]   == "ELEVATED"
+        assert info["next_boundary"] == 56.0
+
+    def test_in_elevated_points_to_severe(self):
+        info = self.engine.near_threshold_info(65.0)
+        assert info["next_regime"]   == "SEVERE"
+        assert info["next_boundary"] == 76.0
+        assert abs(info["pts_to_next_boundary"] - 11.0) < 0.1
+
+    def test_at_or_above_severe_no_next_boundary(self):
+        info = self.engine.near_threshold_info(80.0)
+        assert info["next_boundary"]        is None
+        assert info["next_regime"]          is None
+        assert info["pts_to_next_boundary"] is None
+
+    def test_composite_score_rounded(self):
+        info = self.engine.near_threshold_info(45.678)
+        assert info["composite_score"] == 45.7
+
+    def test_hot_factors_included_when_scores_provided(self):
+        scores = FactorScores(
+            volatility_score=70.0,
+            momentum_score=50.0,
+            breadth_score=80.0,
+            macro_score=40.0,
+            drawdown_score=30.0,
+        )
+        info = self.engine.near_threshold_info(45.0, risk_factor_scores=scores)
+        assert "hot_factors" in info
+        assert "volatility_score" in info["hot_factors"]
+        assert "breadth_score"    in info["hot_factors"]
+        assert "momentum_score"   not in info["hot_factors"]
+
+    def test_no_hot_factors_without_scores(self):
+        info = self.engine.near_threshold_info(45.0)
+        assert "hot_factors" not in info
+
+    def test_uses_custom_thresholds(self):
+        engine = RiskThresholdEngine(severe_threshold=90.0, elevated_threshold=70.0)
+        info = engine.near_threshold_info(65.0)
+        # With default thresholds 65 → next is SEVERE at 76; with custom → next is ELEVATED at 70
+        assert info["next_regime"]   == "ELEVATED"
+        assert info["next_boundary"] == 70.0

@@ -160,18 +160,45 @@ class RiskThresholdEngine:
         (default) to skip beta-weighted trim recommendations.
     db_path:
         Optional path to a SQLite file for result persistence.
+    severe_threshold, elevated_threshold, moderate_threshold:
+        Composite score boundaries for regime classification.
+        Scores >= severe_threshold → SEVERE; >= elevated → ELEVATED; etc.
+    hy_weight, curve_weight:
+        Weights for HY OAS and yield curve components of the macro score.
+        Stored for callers that compute macro scores using this engine's config.
+    hy_floor, hy_range:
+        HY OAS normalisation: score = clamp((hy - hy_floor) / hy_range * 100, 0, 100).
+    curve_normal:
+        Yield curve normalisation: score = clamp((1 - curve / curve_normal) * 100, 0, 100).
     """
 
     def __init__(
         self,
-        factor_weights: Optional[dict[str, float]] = None,
-        ticker_beta:    Optional[dict[str, float]] = None,
-        db_path:        Optional[str] = None,
+        factor_weights:     Optional[dict[str, float]] = None,
+        ticker_beta:        Optional[dict[str, float]] = None,
+        db_path:            Optional[str] = None,
+        severe_threshold:   float = 76.0,
+        elevated_threshold: float = 56.0,
+        moderate_threshold: float = 31.0,
+        hy_weight:          float = 0.60,
+        curve_weight:       float = 0.40,
+        hy_floor:           float = 2.0,
+        hy_range:           float = 8.0,
+        curve_normal:       float = 1.5,
+        **kwargs,
     ):
         self.weights     = factor_weights or DEFAULT_FACTOR_WEIGHTS
         self.ticker_beta = ticker_beta or {}
         self._validate_weights()
-        self.db_path = db_path
+        self.db_path            = db_path
+        self.severe_threshold   = severe_threshold
+        self.elevated_threshold = elevated_threshold
+        self.moderate_threshold = moderate_threshold
+        self.hy_weight          = hy_weight
+        self.curve_weight       = curve_weight
+        self.hy_floor           = hy_floor
+        self.hy_range           = hy_range
+        self.curve_normal       = curve_normal
 
         if self.db_path:
             self._init_db()
@@ -211,6 +238,42 @@ class RiskThresholdEngine:
 
         return result
 
+    def near_threshold_info(
+        self,
+        composite_score: float,
+        risk_factor_scores=None,
+    ) -> dict:
+        """Return proximity to the next regime boundary and any hot individual factors."""
+        boundaries = [
+            (self.severe_threshold,   "SEVERE"),
+            (self.elevated_threshold, "ELEVATED"),
+            (self.moderate_threshold, "MODERATE"),
+        ]
+        next_boundary = next_regime = None
+        for threshold, regime in boundaries:
+            if composite_score < threshold:
+                next_boundary = threshold
+                next_regime   = regime
+
+        result: dict = {
+            "composite_score":      round(composite_score, 1),
+            "next_boundary":        next_boundary,
+            "next_regime":          next_regime,
+            "pts_to_next_boundary": round(next_boundary - composite_score, 1) if next_boundary else None,
+        }
+        if risk_factor_scores:
+            result["hot_factors"] = [
+                name for name, val in [
+                    ("volatility_score", risk_factor_scores.volatility_score),
+                    ("momentum_score",   risk_factor_scores.momentum_score),
+                    ("breadth_score",    risk_factor_scores.breadth_score),
+                    ("macro_score",      risk_factor_scores.macro_score),
+                    ("drawdown_score",   risk_factor_scores.drawdown_score),
+                ]
+                if val >= 65.0
+            ]
+        return result
+
     # ------------------------------------------------------------------
     # Internal: scoring
     # ------------------------------------------------------------------
@@ -234,9 +297,12 @@ class RiskThresholdEngine:
         return composite, breakdown
 
     def _classify_regime(self, score: float) -> RiskRegime:
-        for threshold, regime in REGIME_THRESHOLDS:
-            if score >= threshold:
-                return regime
+        if score >= self.severe_threshold:
+            return RiskRegime.SEVERE
+        if score >= self.elevated_threshold:
+            return RiskRegime.ELEVATED
+        if score >= self.moderate_threshold:
+            return RiskRegime.MODERATE
         return RiskRegime.LOW
 
     # ------------------------------------------------------------------

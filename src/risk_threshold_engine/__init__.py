@@ -10,7 +10,7 @@ from .engine import (
     REGIME_THRESHOLDS,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "RiskThresholdEngine",

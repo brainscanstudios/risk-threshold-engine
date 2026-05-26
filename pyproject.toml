@@ -7,7 +7,7 @@ packages = ["src/risk_threshold_engine"]
 
 [project]
 name = "risk-threshold-engine"
-version = "0.1.0"
+version = "0.2.0"
 authors = [
   { name = "Brain Scan Studios", email = "bkirsten@brainscanstudios.com" },
 ]
